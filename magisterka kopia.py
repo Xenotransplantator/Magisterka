@@ -1,16 +1,15 @@
 # Importowanie niezbędnych bibliotek
 import tkinter as tk
 from tkinter import messagebox
-
-
 import numpy as np
 import matplotlib.pyplot as plt
 from rtlsdr import RtlSdr
 from skyfield.api import Topos, load
-from scipy.optimize import minimize
 from scipy.fft import fft
 import sqlite3
 from flask import Flask, render_template, jsonify, request
+from datetime import datetime
+
 # Funkcja sprawdzająca, czy urządzenie SDR-RTL jest podłączone
 def is_rtl_sdr_connected():
     try:
@@ -31,7 +30,6 @@ def show_alert():
 if not is_rtl_sdr_connected():
     show_alert()
 
-
 # Konfiguracja aplikacji Flask
 app = Flask(__name__)
 
@@ -45,17 +43,14 @@ sdr.gain = 'auto'
 data = load('de421.bsp')
 earth = data['earth']
 
-# Utworzenie obiektu Topos dla położenia obserwatora
+# Utworzenie obiektu Topos dla położenia obserwatora (współrzędne geograficzne użytkownika do wklepania poniżej) 
 observer_latitude = 50.0647
 observer_longitude = 19.9450
 observer_elevation = 200
 observer = earth + Topos(observer_latitude, observer_longitude, elevation_m=observer_elevation)
 
-# Utworzenie obiektu Topos dla położenia stacji kosmicznej
-iss = earth['iss']
-
 # Baza danych SQLite do przechowywania historii pomiarów
-conn = sqlite3.connect('measurements.db')
+conn = sqlite3.connect('measurements.db', check_same_thread=False)
 cursor = conn.cursor()
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS measurements (
@@ -91,7 +86,14 @@ def calculate_astronomical_data():
     current_time = ts.now()
     geocentric = observer.at(current_time).observe(iss)
     subpoint = geocentric.subpoint()
-    return subpoint.latitude.degrees, subpoint.longitude.degrees, subpoint.elevation.km, subpoint.azimuth.degrees, subpoint.altitude.degrees, iss.velocity.km_per_s, iss.is_visible()
+    latitude = subpoint.latitude.degrees
+    longitude = subpoint.longitude.degrees
+    elevation = subpoint.elevation.km
+    azimuth = geocentric.apparent().altaz()[1].degrees
+    altitude = geocentric.apparent().altaz()[0].degrees
+    velocity = iss.velocity.km_per_s
+    visibility = geocentric.apparent().is_sunlit()
+    return latitude, longitude, elevation, azimuth, altitude, velocity, visibility
 
 # Zapisywanie pomiarów do bazy danych
 def save_measurement(date, latitude, longitude, elevation, azimuth, altitude, velocity, visibility, sun_distance, power_spectrum):
@@ -107,8 +109,10 @@ def analyze():
     power_spectrum = analyze_signal()
     latitude, longitude, elevation, azimuth, altitude, velocity, visibility = calculate_astronomical_data()
     sun_distance = iss.distance().km
-    save_measurement(None, latitude, longitude, elevation, azimuth, altitude, velocity, visibility, sun_distance, power_spectrum)
+    date = datetime.now()
+    save_measurement(date, latitude, longitude, elevation, azimuth, altitude, velocity, visibility, sun_distance, power_spectrum)
     return jsonify({
+        'date': date,
         'latitude': latitude,
         'longitude': longitude,
         'elevation': elevation,
