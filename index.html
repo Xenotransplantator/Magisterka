@@ -1,227 +1,75 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pomiar sygnału ze stacji kosmicznej</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>RTL-SDR ISS Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        h1, h2 {
+            text-align: center;
+        }
+        #analyze-button {
+            display: block;
+            margin: 0 auto;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #measurements-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        #measurements-list li {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+    </style>
 </head>
 <body>
-    <h1>Pomiar sygnału ze stacji kosmicznej</h1>
-    
-    <!-- Przycisk do rozpoczęcia analizy -->
-    <button onclick="analyzeSignal()">Analizuj Sygnał</button>
-    <br><br>
-
-    <!-- Wyświetlanie wyników ostatniego pomiaru -->
-    <h2>Ostatni pomiar ze stacji kosmicznej:</h2>
-    <p id="lastMeasurement"></p>
-
-    <!-- Historia pomiarów -->
-    <h2>Historia pomiarów:</h2>
-    <table id="historyTable">
-        <tr>
-            <th>ID</th>
-            <th>Data</th>
-            <th>Szerokość geograficzna</th>
-            <th>Długość geograficzna</th>
-            <th>Wysokość</th>
-            <th>Azymut</th>
-            <th>Wysokość nad horyzontem</th>
-            <th>Prędkość</th>
-            <th>Widoczność</th>
-            <th>Odległość od Słońca</th>
-        </tr>
-    </table>
-
-    <!-- Wykres mocy sygnału -->
-    <canvas id="powerChart" width="800" height="400"></canvas>
-    <br>
-
-    <!-- Checkboxy do wyboru wykresów związanych z danymi liczbowymi -->
-    <input type="checkbox" id="distanceCheckbox" onclick="generateDistanceChart()"> Wykres odległości od Słońca (km)
-    <input type="checkbox" id="velocityCheckbox" onclick="generateVelocityChart()"> Wykres prędkości stacji (km/s)
-
-    <!-- Wykresy związane z danymi liczbowymi -->
-    <canvas id="distanceChart" width="800" height="400" style="display:none"></canvas>
-    <canvas id="velocityChart" width="800" height="400" style="display:none"></canvas>
-
+    <h1>RTL-SDR ISS Tracker</h1>
+    <button id="analyze-button">Analyze Signal</button>
+    <h2>Recent Measurements</h2>
+    <ul id="measurements-list"></ul>
     <script>
-        // Funkcja do rozpoczęcia analizy sygnału
-        function analyzeSignal() {
-            fetch('/analyze', {
-                method: 'POST'
-            })
-            .then(response => response.json())
-            .then(data => {
-                // Wprowadź odczytane dane do odpowiednich pól na stronie
-                document.getElementById('lastMeasurement').innerHTML = `
-                    Data: ${new Date().toLocaleString()}<br>
-                    Szerokość geograficzna: ${data.latitude} stopni<br>
-                    Długość geograficzna: ${data.longitude} stopni<br>
-                    Wysokość: ${data.elevation} km<br>
-                    Azymut: ${data.azimuth} stopni<br>
-                    Wysokość nad horyzontem: ${data.altitude} stopni<br>
-                    Prędkość: ${data.velocity} km/s<br>
-                    Widoczność: ${data.visibility ? 'Tak' : 'Nie'}<br>
-                    Odległość od Słońca: ${data.sun_distance} km
-                `;
-            });
-        }
-
-        // Funkcja do generowania wykresu odległości od Słońca
-        function generateDistanceChart() {
-            // Pobierz dane z serwera
-            fetch('/history')
-            .then(response => response.json())
-            .then(data => {
-                // Przygotuj dane do wykresu
-                const distances = data.map(entry => entry.sun_distance);
-
-                // Konfiguracja wykresu
-                const ctx = document.getElementById('distanceChart').getContext('2d');
-                const chart = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: [...Array(distances.length).keys()],
-                        datasets: [{
-                            label: 'Odległość od Słońca (km)',
-                            data: distances,
-                            borderColor: 'rgb(255, 99, 132)',
-                            borderWidth: 2,
-                            pointRadius: 0,
-                            fill: false
-                        }]
-                    },
-                    options: {
-                        scales: {
-                            x: {
-                                title: {
-                                    display: true,
-                                    text: 'Indeks pomiaru'
-                                }
-                            },
-                            y: {
-                                title: {
-                                    display: true,
-                                    text: 'Odległość od Słońca (km)'
-                                }
-                            }
-                        }
-                    }
+        document.getElementById('analyze-button').addEventListener('click', () => {
+            fetch('/analyze', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    addMeasurementToList(data);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while analyzing the signal.');
                 });
-            });
+        });
+
+        function addMeasurementToList(data) {
+            const measurementsList = document.getElementById('measurements-list');
+            const listItem = document.createElement('li');
+            listItem.textContent = `Date: ${new Date(data.date).toLocaleString()}, Latitude: ${data.latitude}, Longitude: ${data.longitude}, Elevation: ${data.elevation}, Azimuth: ${data.azimuth}, Altitude: ${data.altitude}, Velocity: ${data.velocity}, Visibility: ${data.visibility}, Sun Distance: ${data.sun_distance}`;
+            measurementsList.insertBefore(listItem, measurementsList.firstChild);
         }
 
-        // Funkcja do generowania wykresu prędkości stacji
-        function generateVelocityChart() {
-            // Pobierz dane z serwera
+        function loadHistory() {
             fetch('/history')
-            .then(response => response.json())
-            .then(data => {
-                // Przygotuj dane do wykresu
-                const velocities = data.map(entry => entry.velocity);
-
-                // Konfiguracja wykresu
-                const ctx = document.getElementById('velocityChart').getContext('2d');
-                const chart = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: [...Array(velocities.length).keys()],
-                        datasets: [{
-                            label: 'Prędkość stacji (km/s)',
-                            data: velocities,
-                            borderColor: 'rgb(54, 162, 235)',
-                            borderWidth: 2,
-                            pointRadius: 0,
-                            fill: false
-                        }]
-                    },
-                    options: {
-                        scales: {
-                            x: {
-                                title: {
-                                    display: true,
-                                    text: 'Indeks pomiaru'
-                                }
-                            },
-                            y: {
-                                title: {
-                                    display: true,
-                                    text: 'Prędkość stacji (km/s)'
-                                }
-                            }
-                        }
-                    }
+                .then(response => response.json())
+                .then(data => {
+                    const measurementsList = document.getElementById('measurements-list');
+                    measurementsList.innerHTML = ''; // Clear the list before adding new items
+                    data.forEach(measurement => {
+                        const listItem = document.createElement('li');
+                        listItem.textContent = `Date: ${new Date(measurement.date).toLocaleString()}, Latitude: ${measurement.latitude}, Longitude: ${measurement.longitude}, Elevation: ${measurement.elevation}, Azimuth: ${measurement.azimuth}, Altitude: ${measurement.altitude}, Velocity: ${measurement.velocity}, Visibility: ${measurement.visibility}, Sun Distance: ${measurement.sun_distance}`;
+                        measurementsList.appendChild(listItem);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while loading history.');
                 });
-            });
         }
 
-        // Funkcja do wyświetlania historii pomiarów
-        function refreshHistory() {
-            // Pobierz dane z serwera
-            fetch('/history')
-            .then(response => response.json())
-            .then(data => {
-                // Wprowadź dane do tabeli
-                const table = document.getElementById('historyTable');
-                table.innerHTML = `
-                    <tr>
-                        <th>ID</th>
-                        <th>Data</th>
-                        <th>Szerokość geograficzna</th>
-                        <th>Długość geograficzna</th>
-                        <th>Wysokość</th>
-                        <th>Azymut</th>
-                        <th>Wysokość nad horyzontem</th>
-                        <th>Prędkość</th>
-                        <th>Widoczność</th>
-                        <th>Odległość od Słońca</th>
-                    </tr>
-                `;
-                data.forEach(entry => {
-                    table.innerHTML += `
-                          <table id="historyTable">
-        <!-- Header row -->
-        <tr>
-            <th>ID</th>
-            <th>Data</th>
-            <th>Szerokość geograficzna</th>
-            <th>Długość geograficzna</th>
-            <th>Wysokość</th>
-            <th>Azymut</th>
-            <th>Wysokość nad horyzontem</th>
-            <th>Prędkość</th>
-            <th>Widoczność</th>
-            <th>Odległość od Słońca</th>
-        </tr>
-    </table>
-    
-    <!-- Rest of your HTML content here -->
-
-    <!-- JavaScript for adding data to the table -->
-    <script>
-        function addDataToTable(data) {
-            const table = document.getElementById('historyTable');
-            table.innerHTML += `
-                <tr>
-                    <td>${data.id}</td>
-                    <td>${data.date}</td>
-                    <td>${data.latitude}</td>
-                    <td>${data.longitude}</td>
-                    <td>${data.elevation}</td>
-                    <td>${data.azimuth}</td>
-                    <td>${data.altitude}</td>
-                    <td>${data.velocity}</td>
-                    <td>${data.visibility}</td>
-                    <td>${data.sun_distance}</td>
-                </tr>
-            `;
-        }
-        
-        // Example usage:
-        // const data = { id: 1, date: '2023-09-24', latitude: 50.0, longitude: 19.0, elevation: 200, azimuth: 180, altitude: 45, velocity: 7.5, visibility: true, sun_distance: 149.6 };
-        // addDataToTable(data);
+        document.addEventListener('DOMContentLoaded', loadHistory);
     </script>
 </body>
 </html>
